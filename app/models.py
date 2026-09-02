@@ -19,10 +19,6 @@ class Usuario(Base):
     password_hash = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # LAZY LOADING (por defecto en SQLAlchemy): los favoritos de un usuario
-    # solo se cargan cuando se accede explícitamente a `usuario.favoritos`,
-    # por ejemplo en la pantalla "Mis favoritos". No tiene sentido traerlos
-    # siempre que se autentica o se consulta un usuario.
     favoritos = relationship("Favorito", back_populates="usuario", lazy="select")
 
 
@@ -44,15 +40,26 @@ class Producto(Base):
     categoria = Column(String, nullable=True)
 
     precios = relationship("Precio", back_populates="producto", lazy="select")
+    favoritos = relationship("Favorito", back_populates="producto", lazy="select")
     promociones = relationship("Promocion", back_populates="producto", lazy="select")
 
 
 class Precio(Base):
     """
-    Entidad clave del negocio: un precio de un Producto en un Establecimiento.
-    Comparar precios entre establecimientos es la operación más costosa y la
-    que tiene riesgo real de N+1 (por cada precio hay que saber a qué
-    establecimiento pertenece).
+    Registro HISTÓRICO de precio: cada fila representa el valor de un
+    producto en un establecimiento durante un período de vigencia.
+
+    - vigente_desde: cuándo empezó a regir este valor.
+    - vigente_hasta: cuándo dejó de regir (NULL = sigue vigente ahora).
+    - fuente_usuario_id: quién registró/actualizó este precio, para
+      poder rastrear el origen y detectar actualizaciones no
+      autorizadas o sospechosas.
+
+    En vez de hacer UPDATE sobre el precio vigente cuando cambia, se
+    INSERTA una fila nueva y se cierra la anterior (se le asigna
+    vigente_hasta). Así se conserva el historial completo de cómo varió
+    el precio en el tiempo, en vez de perder esa información con cada
+    actualización.
     """
     __tablename__ = "precios"
 
@@ -60,15 +67,18 @@ class Precio(Base):
     producto_id = Column(UUID(as_uuid=False), ForeignKey("productos.id"), nullable=False)
     establecimiento_id = Column(UUID(as_uuid=False), ForeignKey("establecimientos.id"), nullable=False)
     valor = Column(Float, nullable=False)
-    actualizado_en = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    vigente_desde = Column(DateTime, default=datetime.utcnow, nullable=False)
+    vigente_hasta = Column(DateTime, nullable=True)  # NULL = precio actual
+
+    # Fuente/autorización: quién registró este precio. Por ahora, el
+    # usuario autenticado que hizo la petición (más adelante podría
+    # ampliarse a un rol "establecimiento verificado" o "admin").
+    fuente_usuario_id = Column(UUID(as_uuid=False), ForeignKey("usuarios.id"), nullable=False)
 
     producto = relationship("Producto", back_populates="precios")
-
-    # EAGER LOADING (ver productos.py): cuando se listan los precios de un
-    # producto para comparar, SIEMPRE se necesita el nombre del
-    # establecimiento -> se carga con selectinload/joinedload en la consulta,
-    # evitando 1 consulta adicional por cada precio (N+1).
     establecimiento = relationship("Establecimiento", back_populates="precios")
+    fuente_usuario = relationship("Usuario")
 
 
 class Favorito(Base):
@@ -81,7 +91,7 @@ class Favorito(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     usuario = relationship("Usuario", back_populates="favoritos")
-    producto = relationship("Producto")
+    producto = relationship("Producto", back_populates="favoritos")
 
 
 class Promocion(Base):
