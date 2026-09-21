@@ -1,11 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.auth import get_current_user, CurrentUser
 from app.models import Favorito
-from app.schemas import FavoritoCreate
 
 router = APIRouter(prefix="/api/favoritos", tags=["favoritos"])
 
@@ -15,12 +13,6 @@ def listar_favoritos(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """
-    LAZY LOADING en acción: este es el ÚNICO endpoint donde se cargan los
-    favoritos de un usuario. Se piden explícitamente aquí (con
-    joinedload para traer también el producto en la misma consulta),
-    nunca automáticamente en el login ni en otros endpoints.
-    """
     favoritos = (
         db.query(Favorito)
         .options(joinedload(Favorito.producto))
@@ -32,7 +24,11 @@ def listar_favoritos(
         "favoritos": [
             {
                 "id": f.id,
-                "producto": {"id": f.producto.id, "nombre": f.producto.nombre, "categoria": f.producto.categoria},
+                "producto": {
+                    "id": f.producto.id,
+                    "nombre": f.producto.nombre,
+                    "categoria": f.producto.categoria,
+                },
                 "created_at": f.created_at.isoformat(),
             }
             for f in favoritos
@@ -42,11 +38,14 @@ def listar_favoritos(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def crear_favorito(
-    data: FavoritoCreate,
+    data: dict,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    favorito = Favorito(usuario_id=current_user.id, producto_id=data.producto_id)
+    from sqlalchemy.exc import IntegrityError
+
+    producto_id = data.get("producto_id")
+    favorito = Favorito(usuario_id=current_user.id, producto_id=producto_id)
     db.add(favorito)
     try:
         db.commit()
@@ -56,3 +55,25 @@ def crear_favorito(
 
     db.refresh(favorito)
     return {"id": favorito.id, "mensaje": "Agregado a favoritos"}
+
+
+@router.delete("/{favorito_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_favorito(
+    favorito_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    favorito = db.query(Favorito).filter(Favorito.id == favorito_id).first()
+
+    if not favorito:
+        raise HTTPException(status_code=404, detail="Favorito no encontrado")
+
+    if favorito.usuario_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="No puedes eliminar favoritos de otro usuario",
+        )
+
+    db.delete(favorito)
+    db.commit()
+    return None

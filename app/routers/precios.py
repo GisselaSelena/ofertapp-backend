@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.auth import get_current_user, CurrentUser
+from app.auth import get_current_user, require_admin, CurrentUser
 from app.models import Precio
 from app.schemas import PrecioCreate
 from app.cache import get_or_set_cache, invalidate_cache
@@ -15,17 +15,10 @@ router = APIRouter(prefix="/api", tags=["precios"])
 def crear_precio(
     data: PrecioCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_admin),
 ):
-    """
-    Registra un nuevo precio como HISTÓRICO: si ya existe un precio
-    vigente para este producto+establecimiento, se cierra (se le
-    asigna vigente_hasta = ahora) y se crea uno nuevo como vigente.
-    Así se conserva el historial completo en vez de sobrescribir.
-    """
     ahora = datetime.utcnow()
 
-    # Busca el precio actualmente vigente (si existe) para cerrarlo.
     precio_vigente_anterior = (
         db.query(Precio)
         .filter(
@@ -44,7 +37,10 @@ def crear_precio(
         valor=data.valor,
         vigente_desde=ahora,
         vigente_hasta=None,
-        fuente_usuario_id=current_user.id,  # queda registrado quién lo actualizó
+        fuente_usuario_id=current_user.id,
+        reportado_lat=data.reportado_lat,
+        reportado_lng=data.reportado_lng,
+        tiene_foto_evidencia=data.tiene_foto_evidencia,
     )
     db.add(nuevo_precio)
     db.commit()
@@ -56,6 +52,9 @@ def crear_precio(
         "id": nuevo_precio.id,
         "valor": nuevo_precio.valor,
         "vigente_desde": nuevo_precio.vigente_desde.isoformat(),
+        "reportado_lat": nuevo_precio.reportado_lat,
+        "reportado_lng": nuevo_precio.reportado_lng,
+        "tiene_foto_evidencia": nuevo_precio.tiene_foto_evidencia,
         "mensaje": "Precio registrado",
     }
 
@@ -66,12 +65,6 @@ def comparar_precios(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """
-    Compara los precios VIGENTES (vigente_hasta IS NULL) de un producto
-    entre establecimientos. Al filtrar solo los vigentes, se evita
-    comparar contra precios ya desactualizados que quedaron en el
-    historial.
-    """
     cache_key = f"precios:producto:{producto_id}"
 
     def fetch_from_db():
@@ -83,7 +76,7 @@ def comparar_precios(
             )
             .filter(
                 Precio.producto_id == producto_id,
-                Precio.vigente_hasta.is_(None),  # solo el precio actual
+                Precio.vigente_hasta.is_(None),
             )
             .order_by(Precio.valor.asc())
             .all()
@@ -102,6 +95,8 @@ def comparar_precios(
                     "usuario_id": p.fuente_usuario.id,
                     "nombre": p.fuente_usuario.nombre,
                 },
+                "tiene_ubicacion": p.reportado_lat is not None,
+                "tiene_foto_evidencia": p.tiene_foto_evidencia,
             }
             for p in precios
         ]
@@ -117,12 +112,6 @@ def historial_precios(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """
-    Devuelve TODO el historial de precios de un producto (vigentes y no
-    vigentes), opcionalmente filtrado por establecimiento. Útil para
-    mostrar "cómo ha variado el precio" en la app, y para auditar quién
-    actualizó cada valor.
-    """
     query = (
         db.query(Precio)
         .options(
@@ -147,6 +136,8 @@ def historial_precios(
                 "vigente_actualmente": p.vigente_hasta is None,
                 "establecimiento": p.establecimiento.nombre,
                 "registrado_por": p.fuente_usuario.nombre,
+                "tiene_ubicacion": p.reportado_lat is not None,
+                "tiene_foto_evidencia": p.tiene_foto_evidencia,
             }
             for p in precios
         ],

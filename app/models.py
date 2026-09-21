@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, ForeignKey, DateTime, Text, UniqueConstraint
+from sqlalchemy import Column, String, Float, Boolean, ForeignKey, DateTime, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -18,6 +18,7 @@ class Usuario(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    rol = Column(String, nullable=False, default="usuario", server_default="usuario")
 
     favoritos = relationship("Favorito", back_populates="usuario", lazy="select")
 
@@ -45,22 +46,6 @@ class Producto(Base):
 
 
 class Precio(Base):
-    """
-    Registro HISTÓRICO de precio: cada fila representa el valor de un
-    producto en un establecimiento durante un período de vigencia.
-
-    - vigente_desde: cuándo empezó a regir este valor.
-    - vigente_hasta: cuándo dejó de regir (NULL = sigue vigente ahora).
-    - fuente_usuario_id: quién registró/actualizó este precio, para
-      poder rastrear el origen y detectar actualizaciones no
-      autorizadas o sospechosas.
-
-    En vez de hacer UPDATE sobre el precio vigente cuando cambia, se
-    INSERTA una fila nueva y se cierra la anterior (se le asigna
-    vigente_hasta). Así se conserva el historial completo de cómo varió
-    el precio en el tiempo, en vez de perder esa información con cada
-    actualización.
-    """
     __tablename__ = "precios"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=gen_uuid)
@@ -69,12 +54,13 @@ class Precio(Base):
     valor = Column(Float, nullable=False)
 
     vigente_desde = Column(DateTime, default=datetime.utcnow, nullable=False)
-    vigente_hasta = Column(DateTime, nullable=True)  # NULL = precio actual
+    vigente_hasta = Column(DateTime, nullable=True)
 
-    # Fuente/autorización: quién registró este precio. Por ahora, el
-    # usuario autenticado que hizo la petición (más adelante podría
-    # ampliarse a un rol "establecimiento verificado" o "admin").
     fuente_usuario_id = Column(UUID(as_uuid=False), ForeignKey("usuarios.id"), nullable=False)
+
+    reportado_lat = Column(Float, nullable=True)
+    reportado_lng = Column(Float, nullable=True)
+    tiene_foto_evidencia = Column(Boolean, nullable=False, default=False, server_default="false")
 
     producto = relationship("Producto", back_populates="precios")
     establecimiento = relationship("Establecimiento", back_populates="precios")

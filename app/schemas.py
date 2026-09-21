@@ -3,7 +3,6 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr
 
 
-# ---- Usuario / Auth ----
 class UsuarioCreate(BaseModel):
     nombre: str
     email: EmailStr
@@ -19,6 +18,7 @@ class UsuarioOut(BaseModel):
     id: str
     nombre: str
     email: EmailStr
+    rol: str
 
     class Config:
         from_attributes = True
@@ -30,7 +30,6 @@ class TokenOut(BaseModel):
     usuario: UsuarioOut
 
 
-# ---- Producto / Establecimiento ----
 class ProductoCreate(BaseModel):
     nombre: str
     categoria: Optional[str] = None
@@ -59,11 +58,13 @@ class EstablecimientoOut(BaseModel):
         from_attributes = True
 
 
-# ---- Precio ----
 class PrecioCreate(BaseModel):
     producto_id: str
     establecimiento_id: str
     valor: float
+    reportado_lat: Optional[float] = None
+    reportado_lng: Optional[float] = None
+    tiene_foto_evidencia: bool = False
 
 
 class EstablecimientoMini(BaseModel):
@@ -78,14 +79,13 @@ class EstablecimientoMini(BaseModel):
 class PrecioOut(BaseModel):
     id: str
     valor: float
-    actualizado_en: datetime
+    vigente_desde: datetime
     establecimiento: EstablecimientoMini
 
     class Config:
         from_attributes = True
 
 
-# ---- Favorito ----
 class FavoritoCreate(BaseModel):
     producto_id: str
 
@@ -99,7 +99,6 @@ class FavoritoOut(BaseModel):
         from_attributes = True
 
 
-# ---- Promoción ----
 class PromocionCreate(BaseModel):
     producto_id: str
     establecimiento_id: str

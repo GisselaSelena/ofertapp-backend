@@ -10,53 +10,64 @@ from app.models import Usuario
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-USER_CACHE_TTL = 300  # 5 minutos
+USER_CACHE_TTL = 300
 
 
 class CurrentUser:
-    """Representa al usuario autenticado, construido SOLO desde el JWT."""
-    def __init__(self, id: str, nombre: str, email: str):
+    """Usuario autenticado, construido a partir del JWT (incluye el rol,
+    así no hace falta consultar la base de datos para saber si puede o
+    no realizar una acción de administrador)."""
+    def __init__(self, id: str, nombre: str, email: str, rol: str = "usuario"):
         self.id = id
         self.nombre = nombre
         self.email = email
+        self.rol = rol
 
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> CurrentUser:
-    """
-    Optimización clave de autenticación: el JWT ya trae id/nombre/email
-    firmados. Verificar "quién es" en cada request protegido NO requiere
-    consultar PostgreSQL — se confía en la firma criptográfica del token.
-    Esto evita el patrón redundante de hacer un SELECT a `usuarios` en
-    CADA endpoint protegido.
-    """
     payload = decode_access_token(token)
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido o expirado",
         )
-    return CurrentUser(id=payload["id"], nombre=payload["nombre"], email=payload["email"])
+    return CurrentUser(
+        id=payload["id"],
+        nombre=payload["nombre"],
+        email=payload["email"],
+        rol=payload.get("rol", "usuario"),
+    )
+
+
+def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """
+    Dependencia adicional para endpoints solo de administrador.
+    Diferencia claramente 401 vs 403:
+    - Si no hay token válido, get_current_user ya lanzó 401 antes de
+      llegar aquí.
+    - Si el token es válido pero el rol no es "administrador", se
+      lanza 403: el usuario SÍ está identificado, pero no autorizado
+      para esta acción.
+    """
+    if current_user.rol != "administrador":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta acción requiere rol de administrador",
+        )
+    return current_user
 
 
 async def get_full_user_cached(user_id: str, db: Session = Depends(get_db)) -> Usuario | None:
-    """
-    Para los pocos casos donde SÍ se necesita el registro completo y
-    actualizado (ej. verificar que el usuario sigue activo), se usa
-    cache-aside contra Redis con TTL corto, en vez de golpear PostgreSQL
-    en cada request -> evita consultas redundantes.
-    """
     cache_key = f"usuario:{user_id}"
     cached = redis_client.get(cache_key)
 
     if cached:
-        print(f"🟢 CACHE HIT usuario -> {cache_key}")
         return json.loads(cached)
 
-    print(f"🔴 CACHE MISS usuario -> {cache_key}")
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
 
     if usuario:
-        data = {"id": usuario.id, "nombre": usuario.nombre, "email": usuario.email}
+        data = {"id": usuario.id, "nombre": usuario.nombre, "email": usuario.email, "rol": usuario.rol}
         redis_client.set(cache_key, json.dumps(data), ex=USER_CACHE_TTL)
 
     return usuario

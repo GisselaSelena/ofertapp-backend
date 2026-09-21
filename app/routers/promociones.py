@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.auth import get_current_user, CurrentUser
+from app.auth import require_admin, CurrentUser
 from app.models import Promocion
 from app.schemas import PromocionCreate
 from app.cache import invalidate_cache
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/promociones", tags=["promociones"])
 def crear_promocion(
     data: PromocionCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     promocion = Promocion(
         producto_id=data.producto_id,
@@ -28,12 +28,7 @@ def crear_promocion(
     db.commit()
     db.refresh(promocion)
 
-    # Invalidación explícita: el comparador de precios cacheado de este
-    # producto puede quedar desactualizado con esta promoción.
     invalidate_cache(f"precios:producto:{data.producto_id}")
-
-    # Tarea asíncrona: notificar a quienes tienen este producto en
-    # favoritos, SIN bloquear la respuesta de "crear promoción".
     job_id = encolar_notificacion_promocion(promocion.id, data.producto_id)
 
     return {

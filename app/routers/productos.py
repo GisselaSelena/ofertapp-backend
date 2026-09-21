@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.auth import get_current_user, CurrentUser
+from app.auth import require_admin, CurrentUser
 from app.models import Producto, Establecimiento
 from app.schemas import ProductoCreate, ProductoOut, EstablecimientoCreate, EstablecimientoOut
 
@@ -13,7 +13,9 @@ router = APIRouter(prefix="/api", tags=["productos"])
 def crear_producto(
     data: ProductoCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    # require_admin: si el token es válido pero el usuario no es
+    # administrador, responde 403 (identificado, pero sin permiso).
+    current_user: CurrentUser = Depends(require_admin),
 ):
     producto = Producto(nombre=data.nombre, categoria=data.categoria)
     db.add(producto)
@@ -31,7 +33,7 @@ def listar_productos(db: Session = Depends(get_db)):
 def crear_establecimiento(
     data: EstablecimientoCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     establecimiento = Establecimiento(nombre=data.nombre, direccion=data.direccion)
     db.add(establecimiento)
