@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.auth import get_current_user, CurrentUser
 from app.models import Favorito
+from app.schemas import FavoritoCreate
 
 router = APIRouter(prefix="/api/favoritos", tags=["favoritos"])
 
@@ -38,14 +40,11 @@ def listar_favoritos(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def crear_favorito(
-    data: dict,
+    data: FavoritoCreate,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    from sqlalchemy.exc import IntegrityError
-
-    producto_id = data.get("producto_id")
-    favorito = Favorito(usuario_id=current_user.id, producto_id=producto_id)
+    favorito = Favorito(usuario_id=current_user.id, producto_id=data.producto_id)
     db.add(favorito)
     try:
         db.commit()
