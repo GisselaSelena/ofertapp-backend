@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.database import Base, engine
-from app.routers import auth, productos, precios, favoritos, promociones
+from app.routers import auth, productos, precios, favoritos, promociones, ia
 
 app = FastAPI(title="OfertApp API", version="1.0.0")
 
@@ -14,6 +14,7 @@ app.include_router(productos.router)
 app.include_router(precios.router)
 app.include_router(favoritos.router)
 app.include_router(promociones.router)
+app.include_router(ia.router)
 
 
 @app.get("/health")
