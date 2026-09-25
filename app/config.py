@@ -15,6 +15,11 @@ class Settings:
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", 60))
 
     GEMINI_BASE_URL: str = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com")
+    # Confirmado contra GET {GEMINI_BASE_URL}/v1beta/models?key=API_KEY (no
+    # supuesto/adivinado): "models/gemini-3.8-flash", soporta generateContent.
+    # Si esto vuelve a dar 404, no adivines un nombre nuevo — corré ese
+    # mismo ListModels contra tu API key y fijate qué aparece de verdad; la
+    # disponibilidad de modelos cambia con el tiempo y por cuenta.
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_TIMEOUT_SECONDS: int = int(os.getenv("GEMINI_TIMEOUT_SECONDS", 10))
