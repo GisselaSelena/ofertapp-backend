@@ -47,6 +47,7 @@ def crear_precio(
     db.refresh(nuevo_precio)
 
     invalidate_cache(f"precios:producto:{data.producto_id}")
+    invalidate_cache(f"resumen_ia:producto:{data.producto_id}")
 
     return {
         "id": nuevo_precio.id,

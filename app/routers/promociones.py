@@ -29,6 +29,7 @@ def crear_promocion(
     db.refresh(promocion)
 
     invalidate_cache(f"precios:producto:{data.producto_id}")
+    invalidate_cache(f"resumen_ia:producto:{data.producto_id}")
     job_id = encolar_notificacion_promocion(promocion.id, data.producto_id)
 
     return {
