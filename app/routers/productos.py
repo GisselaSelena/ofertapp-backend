@@ -62,6 +62,7 @@ def actualizar_producto(
 @router.delete("/productos/{producto_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_producto(
     producto_id: str,
+    forzar: bool = False,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
 ):
@@ -72,20 +73,32 @@ def eliminar_producto(
             detail=f"El producto {producto_id} no existe",
         )
 
-    tiene_precios = db.query(Precio).filter(Precio.producto_id == producto_id).first()
-    tiene_favoritos = db.query(Favorito).filter(Favorito.producto_id == producto_id).first()
-    tiene_promociones = db.query(Promocion).filter(Promocion.producto_id == producto_id).first()
-    if tiene_precios or tiene_favoritos or tiene_promociones:
+    precios = db.query(Precio).filter(Precio.producto_id == producto_id).all()
+    favoritos = db.query(Favorito).filter(Favorito.producto_id == producto_id).all()
+    promociones = db.query(Promocion).filter(Promocion.producto_id == producto_id).all()
+    if (precios or favoritos or promociones) and not forzar:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"No se puede eliminar el producto {producto_id}: tiene precios, "
-                "favoritos o promociones asociados"
-            ),
+            detail={
+                "mensaje": (
+                    f"No se puede eliminar el producto {producto.nombre}: "
+                    "tiene datos asociados"
+                ),
+                "nombre": producto.nombre,
+                "precios": len(precios),
+                "favoritos": len(favoritos),
+                "promociones": len(promociones),
+            },
         )
 
-    db.delete(producto)
-    db.commit()
+    try:
+        for relacion in precios + favoritos + promociones:
+            db.delete(relacion)
+        db.delete(producto)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     _invalidar_cache_producto(producto_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -148,6 +161,7 @@ def actualizar_establecimiento(
 )
 def eliminar_establecimiento(
     establecimiento_id: str,
+    forzar: bool = False,
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
 ):
@@ -162,27 +176,42 @@ def eliminar_establecimiento(
             detail=f"El establecimiento {establecimiento_id} no existe",
         )
 
-    tiene_precios = (
+    precios = (
         db.query(Precio)
         .filter(Precio.establecimiento_id == establecimiento_id)
-        .first()
+        .all()
     )
-    tiene_promociones = (
+    promociones = (
         db.query(Promocion)
         .filter(Promocion.establecimiento_id == establecimiento_id)
-        .first()
+        .all()
     )
-    if tiene_precios or tiene_promociones:
+    if (precios or promociones) and not forzar:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"No se puede eliminar el establecimiento {establecimiento_id}: "
-                "tiene precios o promociones asociados"
-            ),
+            detail={
+                "mensaje": (
+                    f"No se puede eliminar el establecimiento {establecimiento.nombre}: "
+                    "tiene datos asociados"
+                ),
+                "nombre": establecimiento.nombre,
+                "precios": len(precios),
+                "favoritos": 0,
+                "promociones": len(promociones),
+            },
         )
 
-    db.delete(establecimiento)
-    db.commit()
+    producto_ids = {precio.producto_id for precio in precios}
+    try:
+        for relacion in precios + promociones:
+            db.delete(relacion)
+        db.delete(establecimiento)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    for producto_id in producto_ids:
+        _invalidar_cache_producto(producto_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
