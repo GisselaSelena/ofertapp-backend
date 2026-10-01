@@ -1,42 +1,7 @@
 from app.auth import CurrentUser
 from app.routers.precios import crear_precio
 from app.schemas import PrecioCreate
-
-
-class FakeRedis:
-    def __init__(self):
-        self.values = {}
-
-    def set(self, key, value, ex=None):
-        self.values[key] = value
-
-    def get(self, key):
-        return self.values.get(key)
-
-    def delete(self, key):
-        return self.values.pop(key, None) is not None
-
-
-class FakeQuery:
-    def filter(self, *conditions):
-        return self
-
-    def first(self):
-        return None
-
-
-class FakeSession:
-    def query(self, model):
-        return FakeQuery()
-
-    def add(self, instance):
-        self.instance = instance
-
-    def commit(self):
-        pass
-
-    def refresh(self, instance):
-        instance.id = "precio-nuevo"
+from tests.fakes import FakeRedis, FakeSession
 
 
 def test_crear_precio_invalida_resumen_ia_cacheado(monkeypatch):
@@ -54,7 +19,7 @@ def test_crear_precio_invalida_resumen_ia_cacheado(monkeypatch):
             establecimiento_id="establecimiento-456",
             valor=2.5,
         ),
-        db=FakeSession(),
+        db=FakeSession(refresh_id="precio-nuevo"),
         current_user=CurrentUser(
             id="admin-789",
             nombre="Admin",

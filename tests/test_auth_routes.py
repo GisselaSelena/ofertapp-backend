@@ -7,25 +7,7 @@ from fastapi.testclient import TestClient
 from app.auth import CurrentUser, get_current_user
 from app.database import get_db
 from app.routers import auth, precios, productos
-
-
-class FakeQuery:
-    def __init__(self, result):
-        self.result = result
-
-    def filter(self, *conditions):
-        return self
-
-    def first(self):
-        return self.result
-
-
-class FakeSession:
-    def __init__(self, query_result=None):
-        self.query_result = query_result
-
-    def query(self, model):
-        return FakeQuery(self.query_result)
+from tests.fakes import FakeSession
 
 
 @pytest.mark.parametrize(
@@ -72,7 +54,9 @@ def test_login_rechaza_contrasena_incorrecta(monkeypatch):
     )
     app = FastAPI()
     app.include_router(auth.router)
-    app.dependency_overrides[get_db] = lambda: FakeSession(query_result=usuario)
+    app.dependency_overrides[get_db] = lambda: FakeSession(
+        query_results={auth.Usuario: usuario}
+    )
     monkeypatch.setattr(auth, "verify_password", lambda password, password_hash: False)
 
     response = TestClient(app).post(
