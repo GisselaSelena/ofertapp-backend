@@ -35,6 +35,11 @@ class ProductoCreate(BaseModel):
     categoria: Optional[str] = None
 
 
+class ProductoUpdate(BaseModel):
+    nombre: str
+    categoria: Optional[str] = None
+
+
 class ProductoOut(BaseModel):
     id: str
     nombre: str
@@ -45,6 +50,11 @@ class ProductoOut(BaseModel):
 
 
 class EstablecimientoCreate(BaseModel):
+    nombre: str
+    direccion: Optional[str] = None
+
+
+class EstablecimientoUpdate(BaseModel):
     nombre: str
     direccion: Optional[str] = None
 
