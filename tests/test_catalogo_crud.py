@@ -66,20 +66,35 @@ def test_actualizar_o_eliminar_catalogo_inexistente_responde_404(method, path, p
 @pytest.mark.parametrize(
     ("path", "parent_model", "related_model", "parent"),
     [
-        ("/api/productos/prod-1", Producto, Precio, SimpleNamespace(id="prod-1")),
-        ("/api/productos/prod-1", Producto, Favorito, SimpleNamespace(id="prod-1")),
-        ("/api/productos/prod-1", Producto, Promocion, SimpleNamespace(id="prod-1")),
+        (
+            "/api/productos/prod-1",
+            Producto,
+            Precio,
+            SimpleNamespace(id="prod-1", nombre="Producto de prueba"),
+        ),
+        (
+            "/api/productos/prod-1",
+            Producto,
+            Favorito,
+            SimpleNamespace(id="prod-1", nombre="Producto de prueba"),
+        ),
+        (
+            "/api/productos/prod-1",
+            Producto,
+            Promocion,
+            SimpleNamespace(id="prod-1", nombre="Producto de prueba"),
+        ),
         (
             "/api/establecimientos/est-1",
             Establecimiento,
             Precio,
-            SimpleNamespace(id="est-1"),
+            SimpleNamespace(id="est-1", nombre="Establecimiento de prueba"),
         ),
         (
             "/api/establecimientos/est-1",
             Establecimiento,
             Promocion,
-            SimpleNamespace(id="est-1"),
+            SimpleNamespace(id="est-1", nombre="Establecimiento de prueba"),
         ),
     ],
 )
@@ -90,7 +105,7 @@ def test_no_elimina_entidad_con_relaciones(path, parent_model, related_model, pa
     response = crear_cliente(db).delete(path)
 
     assert response.status_code == 409
-    assert "asociad" in response.json()["detail"].lower()
+    assert "asociad" in response.json()["detail"]["mensaje"].lower()
     assert db.deleted == []
 
 
